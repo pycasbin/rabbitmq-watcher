@@ -1,12 +1,14 @@
 import logging
-import threading
 import time
+import threading
 
 import casbin
 import pika
 
+LOGGER = logging.getLogger(__name__)
 
-class RabbitWatcher:
+
+class RabbitWatcher(object):
     def __init__(
         self,
         host='localhost',
@@ -17,7 +19,12 @@ class RabbitWatcher:
         routing_key='casbin-policy-updated',
         **kwargs
     ):
-        self.client = None
+        self.connection = None
+        self.channel = None
+        self.routing_key = routing_key
+        self.callback = None
+        self.mutex = threading.Lock()
+        self.watch_thread = threading.Thread(target=self.start_watch, daemon=True)
         credentials = pika.PlainCredentials(username, password)
         self.rabbit_config = pika.ConnectionParameters(
             host=host,
@@ -26,14 +33,15 @@ class RabbitWatcher:
             credentials=credentials,
             **kwargs
         )
-        self.routing_key = routing_key
 
     def create_client(self):
-        self.client = pika.BlockingConnection()
+        self.connection = pika.BlockingConnection(self.rabbit_config)
+        self.channel = self.connection.channel()
+        self.channel.queue_declare(queue=self.routing_key)
 
     def close(self):
-        self.running = False
-        self.logger.info("ETCD watcher closed")
+        self.channel.close()
+        self.connection.close()
 
     def set_update_callback(self, callback):
         """
@@ -49,7 +57,7 @@ class RabbitWatcher:
         """
         update the policy
         """
-        self.client.put(self.keyName, str(time.time()))
+        self.channel.basic_publish(routing_key=self.routing_key, body=str(time.time()))
         return True
 
     def update_for_add_policy(self, section, ptype, *params):
@@ -61,7 +69,7 @@ class RabbitWatcher:
         :return:    True if updated
         """
         message = "Update for add policy: " + section + " " + ptype + " " + str(params)
-        self.logger.info(message)
+        LOGGER.info(message)
         return self.update()
 
     def update_for_remove_policy(self, section, ptype, *params):
@@ -75,7 +83,7 @@ class RabbitWatcher:
         message = (
                 "Update for remove policy: " + section + " " + ptype + " " + str(params)
         )
-        self.logger.info(message)
+        LOGGER.info(message)
         return self.update()
 
     def update_for_remove_filtered_policy(self, section, ptype, field_index, *params):
@@ -97,7 +105,7 @@ class RabbitWatcher:
                 + " "
                 + str(params)
         )
-        self.logger.info(message)
+        LOGGER.info(message)
         return self.update()
 
     def update_for_save_policy(self, model: casbin.Model):
@@ -107,7 +115,7 @@ class RabbitWatcher:
         :return:
         """
         message = "Update for save policy: " + model.to_text()
-        self.logger.info(message)
+        LOGGER.info(message)
         return self.update()
 
     def update_for_add_policies(self, section, ptype, *params):
@@ -121,7 +129,7 @@ class RabbitWatcher:
         message = (
                 "Update for add policies: " + section + " " + ptype + " " + str(params)
         )
-        self.logger.info(message)
+        LOGGER.info(message)
         return self.update()
 
     def update_for_remove_policies(self, section, ptype, *params):
@@ -135,7 +143,7 @@ class RabbitWatcher:
         message = (
                 "Update for remove policies: " + section + " " + ptype + " " + str(params)
         )
-        self.logger.info(message)
+        LOGGER.info(message)
         return self.update()
 
     def start_watch(self):
@@ -143,28 +151,46 @@ class RabbitWatcher:
         starts the watch thread
         :return:
         """
-        events_iterator, cancel = self.client.watch(self.keyName)
-        for event in events_iterator:
-            if isinstance(event, etcd3.events.PutEvent) or isinstance(
-                    event, etcd3.events.DeleteEvent
-            ):
-                self.mutex.acquire()
-                if self.callback is not None:
-                    self.callback(event)
-                self.mutex.release()
+
+        def _watch_callback(ch, method, properties, body):
+            self.mutex.acquire()
+            if self.callback is not None:
+                self.callback(body)
+            self.mutex.release()
+            self.channel.basic_ack(method.delivery_tag)
+
+        self.channel.basic_consume(queue=self.routing_key, on_message_callback=_watch_callback)
 
 
-def new_watcher(endpoints, keyname):
+def new_watcher(
+    host='localhost',
+    port=5672,
+    virtual_host='/',
+    username='guest',
+    password='guest',
+    routing_key='casbin-policy-updated',
+    **kwargs
+):
     """
     creates a new watcher
-    :param endpoints:
-    :param keyname:
+    :param host:
+    :param port:
+    :param virtual_host:
+    :param username:
+    :param password:
+    :param routing_key:
     :return: a new watcher
     """
-    etcd = ETCDWatcher(
-        endpoints=endpoints, running=True, callback=None, key_name=keyname
+    rabbit = RabbitWatcher(
+        host=host,
+        port=port,
+        virtual_host=virtual_host,
+        username=username,
+        password=password,
+        routing_key=routing_key,
+        **kwargs
     )
-    etcd.create_client()
-    etcd.watch_thread.start()
-    etcd.logger.info("ETCD watcher started")
-    return etcd
+    rabbit.create_client()
+    rabbit.watch_thread.start()
+    LOGGER.info("Rabbitmq watcher started")
+    return rabbit
