@@ -11,12 +11,12 @@ LOGGER = logging.getLogger(__name__)
 class RabbitWatcher(object):
     def __init__(
         self,
-        host='localhost',
+        host="localhost",
         port=5672,
-        virtual_host='/',
-        username='guest',
-        password='guest',
-        routing_key='casbin-policy-updated',
+        virtual_host="/",
+        username="guest",
+        password="guest",
+        routing_key="casbin-policy-updated",
         **kwargs
     ):
         self.connection = None
@@ -57,7 +57,9 @@ class RabbitWatcher(object):
         """
         update the policy
         """
-        self.channel.basic_publish(exchange='', routing_key=self.routing_key, body=str(time.time()))
+        self.channel.basic_publish(
+            exchange="", routing_key=self.routing_key, body=str(time.time())
+        )
         return True
 
     def update_for_add_policy(self, section, ptype, *params):
@@ -81,7 +83,7 @@ class RabbitWatcher(object):
         :return:    True if updated
         """
         message = (
-                "Update for remove policy: " + section + " " + ptype + " " + str(params)
+            "Update for remove policy: " + section + " " + ptype + " " + str(params)
         )
         LOGGER.info(message)
         return self.update()
@@ -96,14 +98,14 @@ class RabbitWatcher(object):
         :return:
         """
         message = (
-                "Update for remove filtered policy: "
-                + section
-                + " "
-                + ptype
-                + " "
-                + str(field_index)
-                + " "
-                + str(params)
+            "Update for remove filtered policy: "
+            + section
+            + " "
+            + ptype
+            + " "
+            + str(field_index)
+            + " "
+            + str(params)
         )
         LOGGER.info(message)
         return self.update()
@@ -127,7 +129,7 @@ class RabbitWatcher(object):
         :return:
         """
         message = (
-                "Update for add policies: " + section + " " + ptype + " " + str(params)
+            "Update for add policies: " + section + " " + ptype + " " + str(params)
         )
         LOGGER.info(message)
         return self.update()
@@ -141,7 +143,7 @@ class RabbitWatcher(object):
         :return:
         """
         message = (
-                "Update for remove policies: " + section + " " + ptype + " " + str(params)
+            "Update for remove policies: " + section + " " + ptype + " " + str(params)
         )
         LOGGER.info(message)
         return self.update()
@@ -151,6 +153,7 @@ class RabbitWatcher(object):
         starts the watch thread
         :return:
         """
+
         def _watch_callback(ch, method, properties, body):
             self.mutex.acquire()
             if self.callback is not None:
@@ -158,16 +161,18 @@ class RabbitWatcher(object):
             self.mutex.release()
             self.channel.basic_ack(method.delivery_tag)
 
-        self.channel.basic_consume(queue=self.routing_key, on_message_callback=_watch_callback)
+        self.channel.basic_consume(
+            queue=self.routing_key, on_message_callback=_watch_callback
+        )
 
 
 def new_watcher(
-    host='localhost',
+    host="localhost",
     port=5672,
-    virtual_host='/',
-    username='guest',
-    password='guest',
-    routing_key='casbin-policy-updated',
+    virtual_host="/",
+    username="guest",
+    password="guest",
+    routing_key="casbin-policy-updated",
     **kwargs
 ):
     """

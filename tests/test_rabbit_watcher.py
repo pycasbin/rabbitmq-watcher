@@ -14,7 +14,9 @@ def get_examples(path):
 class TestConfig(TestCase):
     def test_update_rabbitmq_watcher(self):
         watcher = new_watcher()
-        watcher.channel.basic_publish(exchange='', routing_key="casbin-policy-updated", body=str(time.time()))
+        watcher.channel.basic_publish(
+            exchange="", routing_key="casbin-policy-updated", body=str(time.time())
+        )
         assert watcher.update() is True
 
     def test_with_enforcer(self):
