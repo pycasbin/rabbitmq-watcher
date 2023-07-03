@@ -13,7 +13,31 @@ Rabbitmq Watcher is the rabbitmq watcher for pycasbin. With this library, Casbin
 pip install casbin-rabbitmq-watcher
 ```
 
-## Basic Usage Example
+## Simple Example
+```python
+import os
+
+import casbin
+from rabbitmq_watcher import new_watcher
+
+def get_examples(path):
+    examples_path = os.path.split(os.path.realpath(__file__))[0] + "/../examples/"
+    return os.path.abspath(examples_path + path)
+
+def update_callback_func(msg):
+    ...
+
+watcher = new_watcher()
+watcher.set_update_callback(update_callback_func)
+
+e = casbin.Enforcer(
+	get_examples("rbac_model.conf"), get_examples("rbac_policy.csv")
+)
+
+e.set_watcher(watcher)
+# update_callback_func will be called
+e.save_policy()
+```
 
 ## Getting Help
 
