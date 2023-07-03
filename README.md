@@ -14,24 +14,28 @@ pip install casbin-rabbitmq-watcher
 ```
 
 ## Simple Example
+
 ```python
 import os
 
 import casbin
-from rabbitmq_watcher import new_watcher
+from casbin_rabbitmq_watcher import new_watcher
+
 
 def get_examples(path):
     examples_path = os.path.split(os.path.realpath(__file__))[0] + "/../examples/"
     return os.path.abspath(examples_path + path)
 
+
 def update_callback_func(msg):
     ...
+
 
 watcher = new_watcher()
 watcher.set_update_callback(update_callback_func)
 
 e = casbin.Enforcer(
-	get_examples("rbac_model.conf"), get_examples("rbac_policy.csv")
+    get_examples("rbac_model.conf"), get_examples("rbac_policy.csv")
 )
 
 e.set_watcher(watcher)

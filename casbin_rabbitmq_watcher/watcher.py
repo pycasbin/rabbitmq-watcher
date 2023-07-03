@@ -1,3 +1,4 @@
+import functools
 import logging
 import time
 import threading
@@ -8,7 +9,7 @@ import pika
 LOGGER = logging.getLogger(__name__)
 
 
-class RabbitWatcher(object):
+class RabbitWatcher:
     def __init__(
         self,
         host="localhost",
@@ -20,10 +21,11 @@ class RabbitWatcher(object):
         **kwargs
     ):
         self.connection = None
-        self.channel = None
+        self.pub_channel = None
         self.routing_key = routing_key
         self.callback = None
         self.mutex = threading.Lock()
+        self.subscribe_thread = threading.Thread(target=self.start_watch, daemon=True)
         credentials = pika.PlainCredentials(username, password)
         self.rabbit_config = pika.ConnectionParameters(
             host=host,
@@ -35,18 +37,18 @@ class RabbitWatcher(object):
 
     def create_client(self):
         self.connection = pika.BlockingConnection(self.rabbit_config)
-        self.channel = self.connection.channel()
-        self.channel.queue_declare(queue=self.routing_key)
+        self.pub_channel = self.connection.channel()
+        self.pub_channel.queue_declare(queue=self.routing_key)
 
     def close(self):
-        self.channel.close()
+        self.pub_channel.close()
         self.connection.close()
 
     def set_update_callback(self, callback):
         """
         sets the callback function to be called when the policy is updated
-        :param callable callback: callback(msg)
-            - msg: messages received from the rabbitmq
+        :param callable callback: callback(event)
+            - event: event received from the rabbitmq
         :return:
         """
         self.mutex.acquire()
@@ -57,7 +59,7 @@ class RabbitWatcher(object):
         """
         update the policy
         """
-        self.channel.basic_publish(
+        self.pub_channel.basic_publish(
             exchange="", routing_key=self.routing_key, body=str(time.time())
         )
         return True
@@ -154,16 +156,44 @@ class RabbitWatcher(object):
         :return:
         """
 
+        def _ack_message(ch, delivery_tag):
+            if ch.is_open:
+                ch.basic_ack(delivery_tag)
+            else:
+                LOGGER.warning("sub channel has closed.")
+
         def _watch_callback(ch, method, properties, body):
             self.mutex.acquire()
             if self.callback is not None:
                 self.callback(body)
             self.mutex.release()
-            self.channel.basic_ack(method.delivery_tag)
+            cb = functools.partial(_ack_message, ch, method.delivery_tag)
+            ch.connection.add_callback_threadsafe(cb)
 
-        self.channel.basic_consume(
-            queue=self.routing_key, on_message_callback=_watch_callback
-        )
+        while True:
+            try:
+                sub_connection = pika.BlockingConnection(self.rabbit_config)
+                sub_channel = sub_connection.channel()
+                sub_channel.queue_declare(queue=self.routing_key)
+                sub_channel.basic_consume(
+                    queue=self.routing_key, on_message_callback=_watch_callback
+                )
+                try:
+                    sub_channel.start_consuming()
+                except KeyboardInterrupt:
+                    sub_channel.stop_consuming()
+
+                sub_connection.close()
+                break
+                # Do not recover if connection was closed by broker
+            except pika.exceptions.ConnectionClosedByBroker:
+                break
+                # Do not recover on channel errors
+            except pika.exceptions.AMQPChannelError:
+                break
+                # Recover on all other connection errors
+            except pika.exceptions.AMQPConnectionError:
+                continue
 
 
 def new_watcher(
@@ -195,6 +225,6 @@ def new_watcher(
         **kwargs
     )
     rabbit.create_client()
-    rabbit.start_watch()
+    rabbit.subscribe_thread.start()
     LOGGER.info("Rabbitmq watcher started")
     return rabbit

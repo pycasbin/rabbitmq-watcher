@@ -3,7 +3,7 @@ import time
 from unittest import TestCase
 
 import casbin
-from rabbitmq_watcher import new_watcher
+from casbin_rabbitmq_watcher import new_watcher
 
 
 def get_examples(path):
@@ -14,14 +14,18 @@ def get_examples(path):
 class TestConfig(TestCase):
     def test_update_rabbitmq_watcher(self):
         watcher = new_watcher()
-        watcher.channel.basic_publish(
+        watcher.pub_channel.basic_publish(
             exchange="", routing_key="casbin-policy-updated", body=str(time.time())
         )
         assert watcher.update() is True
 
     def test_with_enforcer(self):
-        def _test_update_callback(msg):
-            print("update callback, msg: {}".format(msg))
+        callback_flag = False
+
+        def _test_update_callback(event):
+            nonlocal callback_flag
+            callback_flag = True
+            print("update callback, event: {}".format(event))
 
         watcher = new_watcher()
         watcher.set_update_callback(_test_update_callback)
@@ -30,7 +34,10 @@ class TestConfig(TestCase):
             get_examples("rbac_model.conf"), get_examples("rbac_policy.csv")
         )
         e.set_watcher(watcher)
+        assert callback_flag is False
         e.save_policy()
+        time.sleep(1)
+        assert callback_flag is True
         # related update function not be called in py-casbin yet
         e.add_policy("eve", "data3", "read")
         e.remove_policy("eve", "data3", "read")
@@ -42,3 +49,4 @@ class TestConfig(TestCase):
         ]
         e.add_policies(rules)
         e.remove_policies(rules)
+        watcher.close()
