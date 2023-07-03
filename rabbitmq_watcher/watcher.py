@@ -24,7 +24,6 @@ class RabbitWatcher(object):
         self.routing_key = routing_key
         self.callback = None
         self.mutex = threading.Lock()
-        self.watch_thread = threading.Thread(target=self.start_watch, daemon=True)
         credentials = pika.PlainCredentials(username, password)
         self.rabbit_config = pika.ConnectionParameters(
             host=host,
@@ -46,7 +45,8 @@ class RabbitWatcher(object):
     def set_update_callback(self, callback):
         """
         sets the callback function to be called when the policy is updated
-        :param callback:
+        :param callable callback: callback(msg)
+            - msg: messages received from the rabbitmq
         :return:
         """
         self.mutex.acquire()
@@ -57,7 +57,7 @@ class RabbitWatcher(object):
         """
         update the policy
         """
-        self.channel.basic_publish(routing_key=self.routing_key, body=str(time.time()))
+        self.channel.basic_publish(exchange='', routing_key=self.routing_key, body=str(time.time()))
         return True
 
     def update_for_add_policy(self, section, ptype, *params):
@@ -151,7 +151,6 @@ class RabbitWatcher(object):
         starts the watch thread
         :return:
         """
-
         def _watch_callback(ch, method, properties, body):
             self.mutex.acquire()
             if self.callback is not None:
@@ -191,6 +190,6 @@ def new_watcher(
         **kwargs
     )
     rabbit.create_client()
-    rabbit.watch_thread.start()
+    rabbit.start_watch()
     LOGGER.info("Rabbitmq watcher started")
     return rabbit
