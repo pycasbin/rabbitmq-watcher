@@ -3,6 +3,8 @@ import time
 from unittest import TestCase
 
 import casbin
+import pika
+
 from casbin_rabbitmq_watcher import new_watcher
 
 
@@ -12,12 +14,10 @@ def get_examples(path):
 
 
 class TestConfig(TestCase):
-    def test_update_rabbitmq_watcher(self):
+    def test_watcher_init(self):
         watcher = new_watcher()
-        watcher.pub_channel.basic_publish(
-            exchange="", routing_key="casbin-policy-updated", body=str(time.time())
-        )
-        assert watcher.update() is True
+        assert isinstance(watcher.connection, pika.BlockingConnection)
+        watcher.close()
 
     def test_with_enforcer(self):
         callback_flag = False
@@ -36,7 +36,7 @@ class TestConfig(TestCase):
         e.set_watcher(watcher)
         assert callback_flag is False
         e.save_policy()
-        time.sleep(1)
+        time.sleep(0.5)
         assert callback_flag is True
         # related update function not be called in py-casbin yet
         e.add_policy("eve", "data3", "read")

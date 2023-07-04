@@ -1,10 +1,10 @@
-import functools
 import logging
 import time
 import threading
 
 import casbin
 import pika
+from pika.exchange_type import ExchangeType
 
 LOGGER = logging.getLogger(__name__)
 
@@ -17,14 +17,15 @@ class RabbitWatcher:
         virtual_host="/",
         username="guest",
         password="guest",
-        routing_key="casbin-policy-updated",
+        key="casbin-policy-updated",
         **kwargs
     ):
         self.connection = None
         self.pub_channel = None
-        self.routing_key = routing_key
+        self.key = key
         self.callback = None
         self.mutex = threading.Lock()
+        self.subscribe_event = threading.Event()
         self.subscribe_thread = threading.Thread(target=self.start_watch, daemon=True)
         credentials = pika.PlainCredentials(username, password)
         self.rabbit_config = pika.ConnectionParameters(
@@ -38,7 +39,7 @@ class RabbitWatcher:
     def create_client(self):
         self.connection = pika.BlockingConnection(self.rabbit_config)
         self.pub_channel = self.connection.channel()
-        self.pub_channel.queue_declare(queue=self.routing_key)
+        self.pub_channel.exchange_declare(exchange=self.key, exchange_type=ExchangeType.fanout)
 
     def close(self):
         self.pub_channel.close()
@@ -60,7 +61,7 @@ class RabbitWatcher:
         update the policy
         """
         self.pub_channel.basic_publish(
-            exchange="", routing_key=self.routing_key, body=str(time.time())
+            exchange=self.key, routing_key="", body=str(time.time())
         )
         return True
 
@@ -156,33 +157,36 @@ class RabbitWatcher:
         :return:
         """
 
-        def _ack_message(ch, delivery_tag):
-            if ch.is_open:
-                ch.basic_ack(delivery_tag)
-            else:
-                LOGGER.warning("sub channel has closed.")
-
         def _watch_callback(ch, method, properties, body):
             self.mutex.acquire()
             if self.callback is not None:
                 self.callback(body)
             self.mutex.release()
-            cb = functools.partial(_ack_message, ch, method.delivery_tag)
-            ch.connection.add_callback_threadsafe(cb)
+            if ch.is_open:
+                ch.basic_ack(method.delivery_tag)
+            else:
+                LOGGER.warning("sub channel has closed.")
 
         while True:
             try:
                 sub_connection = pika.BlockingConnection(self.rabbit_config)
                 sub_channel = sub_connection.channel()
-                sub_channel.queue_declare(queue=self.routing_key)
+                sub_channel.exchange_declare(exchange=self.key, exchange_type=ExchangeType.fanout)
+                result = sub_channel.queue_declare(queue="", exclusive=True)
+                queue_name = result.method.queue
+                sub_channel.queue_bind(exchange=self.key, queue=queue_name)
                 sub_channel.basic_consume(
-                    queue=self.routing_key, on_message_callback=_watch_callback
+                    queue=queue_name, on_message_callback=_watch_callback
                 )
                 try:
+                    if not self.subscribe_event.is_set():
+                        self.subscribe_event.set()
                     sub_channel.start_consuming()
+
                 except KeyboardInterrupt:
                     sub_channel.stop_consuming()
 
+                print("sub connection close")
                 sub_connection.close()
                 break
                 # Do not recover if connection was closed by broker
@@ -202,7 +206,7 @@ def new_watcher(
     virtual_host="/",
     username="guest",
     password="guest",
-    routing_key="casbin-policy-updated",
+    key="casbin-policy-updated",
     **kwargs
 ):
     """
@@ -212,7 +216,7 @@ def new_watcher(
     :param virtual_host:
     :param username:
     :param password:
-    :param routing_key:
+    :param key:
     :return: a new watcher
     """
     rabbit = RabbitWatcher(
@@ -221,10 +225,11 @@ def new_watcher(
         virtual_host=virtual_host,
         username=username,
         password=password,
-        routing_key=routing_key,
+        key=key,
         **kwargs
     )
-    rabbit.create_client()
     rabbit.subscribe_thread.start()
+    rabbit.subscribe_event.wait(timeout=5)
+    rabbit.create_client()
     LOGGER.info("Rabbitmq watcher started")
     return rabbit
