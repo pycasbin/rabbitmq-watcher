@@ -19,6 +19,96 @@ class TestConfig(TestCase):
         assert isinstance(watcher.connection, pika.BlockingConnection)
         watcher.close()
 
+    def test_update(self):
+        callback_flag = False
+
+        def callback_function(event):
+            nonlocal callback_flag
+            callback_flag = True
+            print("update callback, event: {}".format(event))
+
+        w = new_watcher()
+        w.set_update_callback(callback_function)
+        assert callback_flag is False
+        w.update()
+        time.sleep(0.5)
+        assert callback_flag is True
+
+    def test_update_for_add_policy(self):
+        callback_flag = False
+
+        def callback_function(event):
+            nonlocal callback_flag
+            callback_flag = True
+            print("update for add policy, event: {}".format(event))
+
+        w = new_watcher()
+        w.set_update_callback(callback_function)
+        assert callback_flag is False
+        w.update_for_add_policy("test1", "test2", "test3")
+        time.sleep(0.5)
+        assert callback_flag is True
+
+    def test_update_for_remove_policy(self):
+        callback_flag = False
+
+        def callback_function(event):
+            nonlocal callback_flag
+            callback_flag = True
+            print("update for remove policy, event: {}".format(event))
+
+        w = new_watcher()
+        w.set_update_callback(callback_function)
+        assert callback_flag is False
+        w.update_for_remove_policy("test1", "test2", "test3")
+        time.sleep(0.5)
+        assert callback_flag is True
+
+    def test_update_for_remove_filtered_policy(self):
+        callback_flag = False
+
+        def callback_function(event):
+            nonlocal callback_flag
+            callback_flag = True
+            print("update for remove filtered policy, event: {}".format(event))
+
+        w = new_watcher()
+        w.set_update_callback(callback_function)
+        assert callback_flag is False
+        w.update_for_remove_filtered_policy("test1", "test2", "test3")
+        time.sleep(0.5)
+        assert callback_flag is True
+
+    def test_update_for_add_policies(self):
+        callback_flag = False
+
+        def callback_function(event):
+            nonlocal callback_flag
+            callback_flag = True
+            print("update for add policies, event: {}".format(event))
+
+        w = new_watcher()
+        w.set_update_callback(callback_function)
+        assert callback_flag is False
+        w.update_for_add_policies("test1", "test2", "test3")
+        time.sleep(0.5)
+        assert callback_flag is True
+
+    def test_update_for_remove_policies(self):
+        callback_flag = False
+
+        def callback_function(event):
+            nonlocal callback_flag
+            callback_flag = True
+            print("update for remove policies, event: {}".format(event))
+
+        w = new_watcher()
+        w.set_update_callback(callback_function)
+        assert callback_flag is False
+        w.update_for_remove_policies("test1", "test2", "test3")
+        time.sleep(0.5)
+        assert callback_flag is True
+
     def test_with_enforcer(self):
         callback_flag = False
 

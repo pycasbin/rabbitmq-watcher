@@ -39,7 +39,9 @@ class RabbitWatcher:
     def create_client(self):
         self.connection = pika.BlockingConnection(self.rabbit_config)
         self.pub_channel = self.connection.channel()
-        self.pub_channel.exchange_declare(exchange=self.key, exchange_type=ExchangeType.fanout)
+        self.pub_channel.exchange_declare(
+            exchange=self.key, exchange_type=ExchangeType.fanout
+        )
 
     def close(self):
         self.pub_channel.close()
@@ -171,7 +173,9 @@ class RabbitWatcher:
             try:
                 sub_connection = pika.BlockingConnection(self.rabbit_config)
                 sub_channel = sub_connection.channel()
-                sub_channel.exchange_declare(exchange=self.key, exchange_type=ExchangeType.fanout)
+                sub_channel.exchange_declare(
+                    exchange=self.key, exchange_type=ExchangeType.fanout
+                )
                 result = sub_channel.queue_declare(queue="", exclusive=True)
                 queue_name = result.method.queue
                 sub_channel.queue_bind(exchange=self.key, queue=queue_name)
