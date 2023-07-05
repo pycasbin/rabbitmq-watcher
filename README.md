@@ -1,6 +1,6 @@
 # rabbitmq-watcher
 
-[![tests](https://github.com/pycasbin/rabbitmq-watcher/actions/workflows/release.yml/badge.svg)](https://github.com/pycasbin/rabbitmq-watcher/actions/workflows/release.yml)
+[![build](https://github.com/pycasbin/rabbitmq-watcher/actions/workflows/build.yml/badge.svg)](https://github.com/pycasbin/rabbitmq-watcher/actions/workflows/build.yml)
 [![Coverage Status](https://coveralls.io/repos/github/pycasbin/rabbitmq-watcher/badge.svg)](https://coveralls.io/github/pycasbin/rabbitmq-watcher)
 [![Version](https://img.shields.io/pypi/v/casbin-rabbitmq-watcher.svg)](https://pypi.org/project/casbin-rabbitmq-watcher/)
 [![PyPI - Wheel](https://img.shields.io/pypi/wheel/casbin-rabbitmq-watcher.svg)](https://pypi.org/project/casbin-rabbitmq-watcher/)
