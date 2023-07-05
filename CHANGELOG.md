@@ -1,5 +1,12 @@
 # Semantic Versioning Changelog
 
+# [1.1.0](https://github.com/pycasbin/rabbitmq-watcher/compare/v1.0.0...v1.1.0) (2023-07-05)
+
+
+### Features
+
+* Update README.md ([bdd2f7a](https://github.com/pycasbin/rabbitmq-watcher/commit/bdd2f7a62e32dea7cf91df4100864349aa806494))
+
 # 1.0.0 (2023-07-05)
 
 
