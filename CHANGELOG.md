@@ -1,5 +1,13 @@
 # Semantic Versioning Changelog
 
+# [1.2.0](https://github.com/pycasbin/rabbitmq-watcher/compare/v1.1.0...v1.2.0) (2023-07-10)
+
+
+### Features
+
+* add MSG class for more info ([3d0698b](https://github.com/pycasbin/rabbitmq-watcher/commit/3d0698b1992216d4fd413e5d6f9857d25da3e014))
+* track remote branch ([ee34c4c](https://github.com/pycasbin/rabbitmq-watcher/commit/ee34c4cfed6342f6d0732117e9c402528c83e3ab))
+
 # [1.1.0](https://github.com/pycasbin/rabbitmq-watcher/compare/v1.0.0...v1.1.0) (2023-07-05)
 
 
