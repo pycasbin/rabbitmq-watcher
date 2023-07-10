@@ -1,6 +1,8 @@
+import json
 import logging
 import time
 import threading
+import uuid
 
 import casbin
 import pika
@@ -18,12 +20,14 @@ class RabbitWatcher:
         username="guest",
         password="guest",
         key="casbin-policy-updated",
-        **kwargs
+        local_id=None,
+        **kwargs,
     ):
         self.connection = None
         self.pub_channel = None
         self.key = key
         self.callback = None
+        self.local_id = local_id if local_id is not None else str(uuid.uuid4())
         self.mutex = threading.Lock()
         self.subscribe_event = threading.Event()
         self.subscribe_thread = threading.Thread(target=self.start_watch, daemon=True)
@@ -33,7 +37,7 @@ class RabbitWatcher:
             port=port,
             virtual_host=virtual_host,
             credentials=credentials,
-            **kwargs
+            **kwargs,
         )
 
     def create_client(self):
@@ -62,8 +66,9 @@ class RabbitWatcher:
         """
         update the policy
         """
+        msg = MSG("Update", self.local_id, "", "", "")
         self.pub_channel.basic_publish(
-            exchange=self.key, routing_key="", body=str(time.time())
+            exchange=self.key, routing_key="", body=msg.marshal_binary()
         )
         return True
 
@@ -75,9 +80,14 @@ class RabbitWatcher:
         :param params:  other params
         :return:    True if updated
         """
-        message = "Update for add policy: " + section + " " + ptype + " " + str(params)
-        LOGGER.info(message)
-        return self.update()
+
+        def func():
+            msg = MSG("UpdateForAddPolicy", self.local_id, section, ptype, params)
+            return self.pub_channel.basic_publish(
+                exchange=self.key, routing_key="", body=msg.marshal_binary()
+            )
+
+        return self.log_record(func)
 
     def update_for_remove_policy(self, section, ptype, *params):
         """
@@ -87,11 +97,14 @@ class RabbitWatcher:
         :param params:  other params
         :return:    True if updated
         """
-        message = (
-            "Update for remove policy: " + section + " " + ptype + " " + str(params)
-        )
-        LOGGER.info(message)
-        return self.update()
+
+        def func():
+            msg = MSG("UpdateForRemovePolicy", self.local_id, section, ptype, params)
+            return self.pub_channel.basic_publish(
+                exchange=self.key, routing_key="", body=msg.marshal_binary()
+            )
+
+        return self.log_record(func)
 
     def update_for_remove_filtered_policy(self, section, ptype, field_index, *params):
         """
@@ -102,18 +115,20 @@ class RabbitWatcher:
         :param params: other params
         :return:
         """
-        message = (
-            "Update for remove filtered policy: "
-            + section
-            + " "
-            + ptype
-            + " "
-            + str(field_index)
-            + " "
-            + str(params)
-        )
-        LOGGER.info(message)
-        return self.update()
+
+        def func():
+            msg = MSG(
+                "UpdateForRemoveFilteredPolicy",
+                self.local_id,
+                section,
+                ptype,
+                f"{field_index} {' '.join(params)}",
+            )
+            return self.pub_channel.basic_publish(
+                exchange=self.key, routing_key="", body=msg.marshal_binary()
+            )
+
+        return self.log_record(func)
 
     def update_for_save_policy(self, model: casbin.Model):
         """
@@ -121,9 +136,20 @@ class RabbitWatcher:
         :param model: casbin model
         :return:
         """
-        message = "Update for save policy: " + model.to_text()
-        LOGGER.info(message)
-        return self.update()
+
+        def func():
+            msg = MSG(
+                "UpdateForSavePolicy",
+                self.local_id,
+                "",
+                "",
+                model.to_text(),
+            )
+            return self.pub_channel.basic_publish(
+                exchange=self.key, routing_key="", body=msg.marshal_binary()
+            )
+
+        return self.log_record(func)
 
     def update_for_add_policies(self, section, ptype, *params):
         """
@@ -133,11 +159,14 @@ class RabbitWatcher:
         :param params:  other params
         :return:
         """
-        message = (
-            "Update for add policies: " + section + " " + ptype + " " + str(params)
-        )
-        LOGGER.info(message)
-        return self.update()
+
+        def func():
+            msg = MSG("UpdateForAddPolicies", self.local_id, section, ptype, params)
+            return self.pub_channel.basic_publish(
+                exchange=self.key, routing_key="", body=msg.marshal_binary()
+            )
+
+        return self.log_record(func)
 
     def update_for_remove_policies(self, section, ptype, *params):
         """
@@ -147,11 +176,23 @@ class RabbitWatcher:
         :param params:  other params
         :return:
         """
-        message = (
-            "Update for remove policies: " + section + " " + ptype + " " + str(params)
-        )
-        LOGGER.info(message)
-        return self.update()
+
+        def func():
+            msg = MSG("UpdateForRemovePolicies", self.local_id, section, ptype, params)
+            return self.pub_channel.basic_publish(
+                exchange=self.key, routing_key="", body=msg.marshal_binary()
+            )
+
+        return self.log_record(func)
+
+    @staticmethod
+    def log_record(f: callable):
+        try:
+            result = f()
+        except Exception as e:
+            print(f"Casbin Redis Watcher error: {e}")
+        else:
+            return result
 
     def start_watch(self):
         """
@@ -204,6 +245,23 @@ class RabbitWatcher:
                 continue
 
 
+class MSG:
+    def __init__(self, method="", id="", sec="", ptype="", *params):
+        self.method: str = method
+        self.id: str = id
+        self.sec: str = sec
+        self.ptype: str = ptype
+        self.params = params
+
+    def marshal_binary(self):
+        return json.dumps(self.__dict__)
+
+    @staticmethod
+    def unmarshal_binary(data: bytes):
+        loaded = json.loads(data)
+        return MSG(**loaded)
+
+
 def new_watcher(
     host="localhost",
     port=5672,
@@ -211,7 +269,7 @@ def new_watcher(
     username="guest",
     password="guest",
     key="casbin-policy-updated",
-    **kwargs
+    **kwargs,
 ):
     """
     creates a new watcher
@@ -230,7 +288,7 @@ def new_watcher(
         username=username,
         password=password,
         key=key,
-        **kwargs
+        **kwargs,
     )
     rabbit.subscribe_thread.start()
     rabbit.subscribe_event.wait(timeout=5)
