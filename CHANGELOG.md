@@ -1,5 +1,12 @@
 # Semantic Versioning Changelog
 
+# [1.3.0](https://github.com/pycasbin/rabbitmq-watcher/compare/v1.2.0...v1.3.0) (2024-03-29)
+
+
+### Features
+
+* upgrade CI Node.js version to 20 ([ada7e99](https://github.com/pycasbin/rabbitmq-watcher/commit/ada7e99a9db15a661a85d10dc8da8125423a0ced))
+
 # [1.2.0](https://github.com/pycasbin/rabbitmq-watcher/compare/v1.1.0...v1.2.0) (2023-07-10)
 
 
